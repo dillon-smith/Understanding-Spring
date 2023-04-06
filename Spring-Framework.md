@@ -176,3 +176,229 @@ Yet we *still* have problems. You are still manually wiring up the dependencies 
 *Dependency Injection Containers* are containers which construct and manage dependencies *and* inject these dependencies into the dependent objects.
 
 # Dependency Injection with Spring
+A Dependency Injection Container (DI Container) is a container that manages the classes we write, and configures their dependencies for us. At its core, the Spring Framework is a dependency injection container.
+
+## Spring Application Context
+Within the Spring DI container, the element that manages our dependencies is called the *Application Context*.
+```
+public class MovieCrudApplication {
+
+    public static void main(String[] args) {
+        ApplicationContext context = new AnnotationConfigApplicationContext(configClass);
+
+        MovieRepository movieRepo = context.getBean(MovieRepository.class);
+        Movie movie101 = movieRepo.findById(101);
+        Movie titanic = movieRepo.findByName("Titanic");
+
+        DataSource dataSource = context.getBean(DataSource.class);
+
+    }
+
+}
+```
+In the code snippet above, we constructed the Spring `ApplicationContext`.
+
+- The `ApplicationContext` gives us a fully constructed `MovieRepository`, with its `DataSource` dependency provided by the `ApplicationContext`.
+- We can also retrieve a DataSource object. This DataSource object is the *same* object as the one provided to the `MovieRepository`.
+- We no longer have to manually provide dependencies, nor do our objects have to resolve their dependencies themself. All we need to do is ask the `ApplicationContext` for an instance of our object.
+
+The `ApplicationContext` understands how to construct our objects and provide their dependencies through what the Spring framework calls a `Configuration`. Recall that in the code above we provided a configuration to the `ApplicationContext`.
+
+### Application Configurations
+What we really passed into the constructor above, is something like this:
+```
+@Configuration
+public class DataSourceConfiguration {
+
+    @Bean
+    public DataSource dataSource() {
+        DataSource dataSource = new OracleDataSource();
+        dataSource.setURL("jdbc:oracle:thin:@localhost:8080:orcl");
+        dataSource.setUser("dillon");
+        dataSource.setPassword("myPassword");
+        return dataSource;
+    }
+
+    @Bean
+    public MovieRepository movieRepository() {
+        return new MovieRepository(dataSource());
+    }
+
+}
+```
+- We have a dedicated configuration class. This class is annotated with `@Configuration`
+- We have a method that returns a `DataSource`. This method is annotated with `@Bean`
+- We have a `@Bean` annotated method that returns a `MovieRepository`, constructing it with the `DataSource` obtained via the `dataSource` method.
+
+This Configuration class was all we needed to run our application, and have Spring manage and resolve our object dependencies.
+
+## Beans and The `@Bean` Annotation
+A Bean is an object that is created and managed by the Spring framework, and whose dependencies are injected by Spring.
+
+The `@Bean` annotation is an annotation applied to a method and indicates to the Spring framework that it returns a Bean that should be managed by Spring.
+
+### Bean Scopes
+You might have the following questions:
+- How does Spring know how many instances of a bean to create?
+- When does Spring create a bean?
+
+Spring manages this concept through something called a *bean scope*. By default, all Spring beans are singletons. These beans are created when the Spring container is started.
+
+Out of the box, the Spring framework supports six scopes. It is also possible to create your own scope, but that is not covered in this guide.
+| Scope | Description |
+| ------------- | ------------- |
+| Singleton  | (Default) Scopes a sikngle bean definition to a single object instance for each Spring IoC container.  |
+| Prototype  | Scopes a single bean definition to any number of object instances. |
+| Request  | Scopes a single bean definition to the lifecycle of a single HTTP request. That is, each HTTP request has its own instance of a bean created off the back of a single bean definition. Only valid in the context of a web-aware Spring ApplicationContext.|
+| Session  | Scopes a single bean definition to the lifecycle of an HTTP Session. Only valid in the context of a web-aware Spring ApplicationContext.  |
+| Application  | Scopes a single bean definition to the lifecycle of a ServletContext. Only valid in the context of a web-aware Spring ApplicationContext.  |
+| Websocket  | Scopes a single bean definition to the lifecycle of a WebSocket. Only valid in the context of a web-aware Spring ApplicationContext. |
+
+A scope can be applied to a Bean like-so:
+```
+@Configuration
+public class DataSourceConfiguration {
+
+    @Bean
+    @Scope("singleton")
+    public DataSource dataSource() {
+        DataSource dataSource = new OracleDataSource();
+        dataSource.setURL("jdbc:oracle:thin:@localhost:8080:orcl");
+        dataSource.setUser("dillon");
+        dataSource.setPassword("myPassword");
+        return dataSource;
+    }
+
+    @Bean
+    @Scope("prototype")
+    public MovieRepository movieRepository() {
+        return new MovieRepository(dataSource());
+    }
+
+}
+```
+
+Most applications consist of singleton beans.
+
+### Component Scanning
+Lets take a look at our `Configuration` class again.
+```
+@Configuration
+public class DataSourceConfiguration {
+
+    @Bean
+    @Scope("singleton")
+    public DataSource dataSource() {
+        DataSource dataSource = new OracleDataSource();
+        dataSource.setURL("jdbc:oracle:thin:@localhost:8080:orcl");
+        dataSource.setUser("dillon");
+        dataSource.setPassword("myPassword");
+        return dataSource;
+    }
+
+    @Bean
+    @Scope("prototype")
+    public MovieRepository movieRepository() {
+        return new MovieRepository(dataSource());
+    }
+
+}
+```
+In order to provide the `MovieRepository` with a `DataSource`, our `movieRepository` method is manually invoking the `dataSource` method. Why do we have to manually do this? Isn't this a problem we were trying to solve?
+
+This is where the `@ComponentScan` annotation comes into play. It turns out that if we added this annotation to our configuration, we can entirely remove the `movieRepository` method and let Spring figure out how to create the `MovieRepository`.
+```
+@Configuration
+@ComponentScan
+public class DataSourceConfiguration {
+
+    @Bean
+    @Scope("singleton")
+    public DataSource dataSource() {
+        DataSource dataSource = new OracleDataSource();
+        dataSource.setURL("jdbc:oracle:thin:@localhost:8080:orcl");
+        dataSource.setUser("dillon");
+        dataSource.setPassword("myPassword");
+        return dataSource;
+    }
+
+}
+```
+
+The `@ComponentScan` annotation tells Spring to search for beans by scaning *all* packages *and* subpackages in the same package as the context configuration.
+
+How does Spring know if something is a bean? It looks for the `@Component` annotation on your class.
+
+We can add the `@Component` annotation to our `MovieRepository` like-so.
+ ```
+ @Component
+ public class MovieRepository {
+
+    private DataSource dataSource;
+
+    public MovieRepository(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+}
+```
+
+The `MovieRepository` class now tells Spring: If you find me via a component scan, then I want to be a Spring bean managed by the Spring IoC container. Spring has all the information it needs to configure both our `DataSource`, and our `MovieRepository`.
+
+How does Spring know where to get the `DataSource`? In earlier versions of Spring, it would not have been. You would need to add the `@Autowired` annotation like this:
+ ```
+ @Component
+ public class MovieRepository {
+
+    private DataSource dataSource;
+
+    public MovieRepository(@Autowired DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+}
+```
+Newer versions of Spring are actually smart enough to understand your component's dependencies without the `@Autowired` annotation. Explicitly adding `@Autowired` can help to make your code more understandable.
+
+### Field Injection and Setter Injection
+Spring is not required to go through a constructor to inject dependencies.
+
+#### Field Injection
+```
+ @Component
+ public class MovieRepository {
+
+    @Autowired
+    private DataSource dataSource;
+
+    public MovieRepository() {
+        // empty constructor
+        // Spring cannot provide the dependency here
+    }
+
+}
+```
+
+#### Setter Injection
+```
+ @Component
+ public class MovieRepository {
+
+    private DataSource dataSource;
+
+    public MovieRepository() {
+        // empty constructor
+        // Spring cannot provide the dependency here
+    }
+
+    @Autowired
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+}
+```
+
+These two examples are different roads to the same destination. In both scenarios Spring will inject the `DataSource` dependency, and our `MovieRepository` will be fully constructed and managed by Spring.
+
+Which injection method to choose? The [Spring framework's documentation](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-setter-injection) recommends using constructor injection for all mandatory dependencies, and setter injection for optional dependencies. 
