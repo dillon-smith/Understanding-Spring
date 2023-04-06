@@ -63,7 +63,7 @@ What if later we needed to update this repository with another method of locatin
 public class MovieRepository {
 
     public Movie findById(Long id) {
-        OracleDataSource dataSource = new OracleDataSource();
+        DataSource dataSource = new OracleDataSource();
         dataSource.setURL("jdbc:oracle:thin:@localhost:8080:orcl");
         dataSource.setUser("dillon");
         dataSource.setPassword("myPassword");
@@ -74,7 +74,7 @@ public class MovieRepository {
     }
 
     public Movie findByName(String name) {
-        OracleDataSource dataSource = new OracleDataSource();
+        DataSource dataSource = new OracleDataSource();
         dataSource.setURL("jdbc:oracle:thin:@localhost:8080:orcl");
         dataSource.setUser("dillon");
         dataSource.setPassword("myPassword");
@@ -416,6 +416,6 @@ Spring is not required to go through a constructor to inject dependencies.
 }
 ```
 
-These two examples are different roads to the same destination. In both scenarios Spring will inject the `DataSource` dependency, and our `MovieRepository` will be fully constructed and managed by Spring.
+Constructor Injection, Field Injection, and Setter Injection are all different roads to the same destination. In each scenario Spring injects the `DataSource` dependency, and our `MovieRepository` is fully constructed and managed by Spring.
 
 Which injection method to choose? The [Spring framework's documentation](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-setter-injection) recommends using constructor injection for all mandatory dependencies, and setter injection for optional dependencies. 
