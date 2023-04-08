@@ -1,13 +1,13 @@
 # Introduction
-Spring is one of the most widely used Java frameworks. This 2022 LinkedIn article indicates that over 60% of surveyed Java developers are using Spring Boot. Despite this, many developers feel like Spring is 'magic', consisting of lots of annotations and unexpected behavior that leave them scratching their heads.
+Spring is one of the most widely used Java frameworks. This [2019 survey by JetBrains](https://www.jetbrains.com/lp/devecosystem-2019/java/)[^1]article indicates that over 60% of surveyed Java developers are using Spring Boot. Despite this, many developers feel like Spring is 'magic', consisting of lots of annotations and unexpected behavior that leave them scratching their heads.
+
+[^1]: https://www.jetbrains.com/lp/devecosystem-2019/java/
 
 The Spring ecosystem currently consists of 21 active projects such as Spring Boot, Spring Data, Spring Batch, Spring Security, etc. All of these projects are built on top of Spring's core project: Spring Framework. 
 
 Without fully understanding the core Spring Framework, attempting to utilize Spring's other projects such as Spring Boot will lead to that feeling of interacting with 'magic scrolls'.
 
-Spring is described as a 'Dependency Injection' or 'Inversion of Control' container. But what does that even mean?
-
-This document answers that question.
+This guide is meant to provide a more intuitive understanding of what the Spring framework is.
 
 # What is a Dependency?
 Imagine you are writing a Java class that accesses a Movies table in a database. The class might look something like this:
@@ -21,9 +21,9 @@ public class MovieRepository {
 }
 ```
 
-Our ```MovieRepository``` has a ```findById``` method which executes some SQL to locate a movie by its ID.
+Our ```MovieRepository``` has a ```findById``` method which executes SQL to locate a movie by its ID.
 
-In order to execute our query, this class ***depends on*** a connection to our database. In Java, database connections are usually represented with some type of data source. Our code would look like this:
+In order to execute our query, this class ***depends on*** a connection to our database. In Java, a database connection is usually represented with some type of data source. Our code would look like this:
 
 ```
 public class MovieRepository {
@@ -37,9 +37,9 @@ public class MovieRepository {
 }
 ```
 ## Resolving Dependencies
-Our ```findById``` method above is using some ```dataSource``` object to obtain the connection to the database. Where does this ```dataSource``` object come from?
+Our ```findById``` method above is using a ```dataSource``` object to obtain the connection to the database. Where does the ```dataSource``` object come from?
 
-One way of obtaining this dataSource could be to create it ourselves:
+One way of obtaining a dataSource could be to create it ourselves:
 ```
 public class MovieRepository {
 
@@ -56,7 +56,7 @@ public class MovieRepository {
 }
 ```
 
-We have updated our ```findById``` method to create an OracleDataSource object, and configured it with our URL, user, and password.
+We have updated our ```findById``` method to create a DataSource object, and configured it with our URL, user, and password.
 
 What if later we needed to update this repository with another method of locating Movies? Your code might look something like this:
 ```
@@ -87,8 +87,8 @@ public class MovieRepository {
 }
 ```
 We have a few notable drawbacks by obtaining our data sources this way:
-1. We are creating a new ```OracleDataSource``` for each executed query. Opening and closing data sources is an expensive operation. It makes sense for us to pay the cost of creating and closing these connections as little as necessary.
-2. It is extremely unlikely that our database contains just movies. What if we also had a ```ProducerRepository```, ```DirectorRepository```, and a ```StudioRepository```? We would need to create and manage an ```OracleDataSource``` in each of these repositories.
+1. We are creating a new ```DataSource``` for each executed query. Opening and closing data sources is an expensive operation. It would be ideal if we could limit how often we had to pay for this operation.
+2. It is extremely unlikely that our database contains just movies. What if we also had a ```ProducerRepository```, ```DirectorRepository```, and a ```StudioRepository```? We would need to create and manage an ```DataSource``` in each of these repositories.
 3. Creating and managing this data source crowds the code and makes our business logic less apparent.
 
 How could we solve these problems? One way would be to write a singleton ```DataSourceManager``` class which is responsible for creating the ```DataSource```.
@@ -111,19 +111,19 @@ public class DataSourceManager {
 }
 
 ```
-And our MovieRepository would look like this:
+And our `MovieRepository` would look like this:
 ```
 public class MovieRepository {
 
     public Movie findById(Long id) {
         try(Connection conn = DataSourceManager.getDataSource().getConnection()) {
-            var select = connection.prepareStatement("select * from movies where id = ?");
+            PreparedStatement select = connection.prepareStatement("select * from movies where id = ?");
         }
     }
 
     public Movie findByName(String name) {
         try(Connection conn = DataSourceManager.getDataSource().getConnection()) {
-            var select = connection.prepareStatement("select * from movies where name = ?");
+            PreparedStatement select = connection.prepareStatement("select * from movies where name = ?");
         }
     }
 
@@ -135,7 +135,7 @@ public class MovieRepository {
 
 Unfortunately we still have several drawbacks:
 1. Our ```MovieRepository``` still needs to know how to resolve its ```DataSource``` dependency. In this case it has to know to obtain the `DataSource` from the ```DataSourceManager``` class.
-2. This approach does not scale well. Applications frequently have lots of dependencies that need to be managed. The ```DataSourceManager``` class would grow into a huge unmaintainable mess of a class.
+2. This approach does not scale well. Applications frequently have lots of dependencies that need to be managed. Our code base would end up littered with similar `Manager` classes, or even one big `Application` class that manages all the dependencies. 
 
 ## A Better Approach
 
@@ -166,17 +166,17 @@ Unfortunately we still have several drawbacks:
 
 }
 ```
-Whenever someone wants an instance of our ```MovieRepository``` class, they **must** inject the ```DataSource``` via the constructor. The ```findBy``` methods will use the injected ```DataSource```.
+Whenever someone wants an instance of our ```MovieRepository``` class, they **must** inject the ```DataSource``` via the constructor. The ```findBy``` methods will then use the injected ```DataSource```.
 
 This offers a few improvements:
 
 1. ```MovieRepository``` does not need to care about how the ```DataSource``` is created or who creates it.
 2. The ```MovieRepository``` can be instantiated with a variety of different database connections like an ```OracleDataSource``` or a ```MysqlDataSource```.
-3. Writing unit tests for this ```MovieRepository``` just got a lot easier. We no longer have to have a full-fledged database connection, and can instead instantiate the ```MovieRepository``` with a dummy database connection.
+3. Writing unit tests for this ```MovieRepository``` just got a lot easier. We no longer have to have a full-fledged database connection, and can instead instantiate the ```MovieRepository``` with a variety of database connections suitable for testing. We could even test our ```MovieRepository``` with a broken data source, a valid data source, a data source that does not have data, etc.
 
-Yet we *still* have problems. You are still manually wiring up the dependencies *somewhere*. All you accomplished was moving the complexity to a different part of the code. The perfect solution would be some type of paradigm that allows us to declare ```MovieRepository```'s dependencies, and avoid the manual injection of the dependencies.
+Yet we *still* have problems. We are still manually wiring up the dependencies *somewhere*. All we accomplished was moving the complexity to a different part of the code. The perfect solution would be some type of paradigm that allows us to declare ```MovieRepository```'s dependencies, and avoid the manual injection of the dependencies.
 
-*Dependency Injection Containers* are containers which construct and manage dependencies *and* inject these dependencies into the dependent objects.
+*Dependency Injection Containers* are containers which create managed objects, taking care of where and how the objects are created.
 
 # Dependency Injection with Spring
 A Dependency Injection Container (DI Container), or Inversion of Control (IoC) container, is a container that manages the classes we write, and configures their dependencies for us. At its core, the Spring Framework is an IoC container.
@@ -332,7 +332,7 @@ public class DataSourceConfiguration {
 
 The `@ComponentScan` annotation tells Spring to search for beans by scaning *all* packages *and* subpackages in the same package as the context configuration.
 
-How does Spring know if something is a bean? It looks for the `@Component` annotation on your class.
+How does Spring know if something is a bean? It looks for the `@Component` in packages being searched.
 
 We can add the `@Component` annotation to our `MovieRepository` like-so.
  ```
@@ -348,7 +348,7 @@ We can add the `@Component` annotation to our `MovieRepository` like-so.
 }
 ```
 
-The `MovieRepository` class now tells Spring: If you find me via a component scan, then I want to be a Spring bean managed by the Spring IoC container. Spring has all the information it needs to configure both our `DataSource`, and our `MovieRepository`.
+The `MovieRepository` class now tells Spring: 'I want to be a Spring bean managed by the Spring IoC container!' Spring has all the information it needs to configure both our `DataSource`, and our `MovieRepository`.
 
 How does Spring know where to get the `DataSource`? In earlier versions of Spring, it would not have been. You would need to add the `@Autowired` annotation like this:
  ```
@@ -375,6 +375,8 @@ The Spring ecosystem features numerous *stereotype* annotations that are all spe
 | `@RestController`| A convenience annotation that is itself annotated with `@Controller` and `@ResponseBody`.  |
 
 If you inspect these annotations in your IDE, you will find that they are all also annotated with `@Component`.
+
+**Note**: The `@Component` annotation is itself considered a stereotype.
 
 
 ### Field Injection and Setter Injection
@@ -418,4 +420,75 @@ Spring is not required to go through a constructor to inject dependencies.
 
 Constructor Injection, Field Injection, and Setter Injection are all different roads to the same destination. In each scenario Spring injects the `DataSource` dependency, and our `MovieRepository` is fully constructed and managed by Spring.
 
-Which injection method to choose? The [Spring framework's documentation](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-setter-injection) recommends using constructor injection for all mandatory dependencies, and setter injection for optional dependencies. 
+Which injection method to choose? The [Spring framework's documentation](https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-setter-injection) recommends using constructor injection for all mandatory dependencies, and setter injection for optional dependencies.
+
+# Spring Ecosystem
+Some of the most common projects within the Spring ecosystem are as follows:
+| Project | Description | 
+| ------------- | ------------- |
+|[Spring Framework](https://spring.io/projects/spring-framework)|Provides core support for dependency injection, transaction management, web apps, data access, messaging, and more.|
+|[Spring Boot](https://spring.io/projects/spring-boot)|Takes an opinionated view of building Spring applications.|
+|[Spring Data](https://spring.io/projects/spring-data)|Provides a consistent approach to data access.|
+|[Spring Security](https://spring.io/projects/spring-security)|Provides extensible authentication and authorizatino support.|
+|[Spring Kafka](https://spring.io/projects/spring-kafka)|Provides Spring abstractions for Apache Kafka|
+
+A full list of Spring projects can be found [here](https://spring.io/projects).
+
+# Terms and Jargon
+## Dependency
+An object that another object depends on for critical functionality.
+
+## Inversion of Control (IoC)
+A design pattern frequently used for decoupling the resolution of an object's dependencies from the object's behavior.
+
+## Dependency Injection (DI)
+A particular method of implementing Inversion of Control in which an object receives dependencies from an external source. 
+
+## Spring Application Context
+A container that is responsible for creating, configuring, and managing a Spring Bean. The container uses metadata like Configuration classes to understand the creation, configuration, and management of a bean.
+
+ Also commonly referred to as:
+ - Application context
+ - Spring container
+ - Spring IoC container
+ - IoC container
+ - DI container
+
+## Stereotype Annotation
+An annotation for specializations of Spring managed beans.
+
+## Constructor Injection
+A particular method of implementing DI in which an object receives dependencies from an external source through an object's constructor.
+
+## Field Injection
+A particular method of implementing DI in which an object receives dependencies when an external source directly mutates the object's fields. 
+
+## Setter Injection
+A particular method of implementing DI in which an object receives dependencies by an external source invoking the object's setter methods.
+
+## `@Configuration`
+Indicates that a class contains `@Bean` annotated methods, and that the Spring Application Context can use this class as metadata for creating, configuring, and managing beans.
+
+## `@ComponentScan`
+An annotation applied to a `@Configuration` that allows Spring to autodetect and register metadata within the Application Context for `@Component` and other sterotype annotated classes.
+
+## `@Bean`
+An annotation that indicates that a method produces a bean to be managed by the Spring Application Context.
+
+## `@Scope`
+An annotation that can be attached to a `@Component` or `@Bean` and provides the Spring Application Context instruction on how to manage the creation and lifecycle of a bean.
+
+## `@Component`
+An annotation that indicates that a class is a candidate for component scanning autodetection.
+
+## `@Repository`
+An annotation that indicates that a class is a candidate for component scanning autodetection, and indicates that an annotated class is a "Repository".
+
+## `@Service`
+An annotation that indicates that a class is a candidate for component scanning autodetection, and indicates that an annotated class is a "Service".
+
+## `@Controller`
+An annotation that indicates that a class is a candidate for component scanning autodetection, and indicates that an annotated class is a "Controller".
+
+## `@RestController`
+An annotation that indicates that a class is a candidate for component scanning autodetection, and indicates that an annotated class is a "Controller" within a REST architecture.
