@@ -23,7 +23,7 @@ public class MovieRepository {
 
 Our ```MovieRepository``` has a ```findById``` method which executes SQL to locate a movie by its ID.
 
-In order to execute our query, this class ***depends on*** a connection to our database. In Java, a database connection is usually represented with some type of data source. Our code would look like this:
+In order to execute our query, this class ***depends on*** a connection to our database. In Java, a database connection is usually represented with an instance of some type of `DataSource` object. Our code would look like this:
 
 ```
 public class MovieRepository {
@@ -50,7 +50,7 @@ public class MovieRepository {
         dataSource.setPassword("myPassword");
 
         try(Connection conn = dataSource.getConnection()) {
-            var select = connection.prepareStatement("select * from movies where id = ?");
+            PreparedStatement select = connection.prepareStatement("select * from movies where id = ?");
         }
     }
 }
@@ -69,7 +69,7 @@ public class MovieRepository {
         dataSource.setPassword("myPassword");
 
         try(Connection conn = dataSource.getConnection()) {
-            var select = connection.prepareStatement("select * from movies where id = ?");
+            PreparedStatement select = connection.prepareStatement("select * from movies where id = ?");
         }
     }
 
@@ -80,7 +80,7 @@ public class MovieRepository {
         dataSource.setPassword("myPassword");
 
         try(Connection conn = dataSource.getConnection()) {
-            var select = connection.prepareStatement("select * from movies where name = ?");
+            PreparedStatement select = connection.prepareStatement("select * from movies where name = ?");
         }
     }
 
@@ -207,7 +207,7 @@ In the code snippet above, we constructed the Spring `ApplicationContext`.
 - We can also retrieve a DataSource object. This DataSource object is the *same* object as the one provided to the `MovieRepository`.
 - We no longer have to manually provide dependencies, nor do our objects have to resolve their dependencies themself. All we need to do is ask the `ApplicationContext` for an instance of our object.
 
-The `ApplicationContext` understands how to construct our objects and provide their dependencies through what the Spring framework calls a `Configuration`. Recall that in the code above we provided a configuration to the `ApplicationContext`.
+The `ApplicationContext` understands how to construct our objects and provide their dependencies through what the Spring framework calls a `Configuration`. Recall that in the code above we provided a `configuration` variable to the `ApplicationContext`.
 
 ### Application Configurations
 What we really passed into the constructor above, is something like this:
@@ -330,7 +330,7 @@ public class DataSourceConfiguration {
 }
 ```
 
-The `@ComponentScan` annotation tells Spring to search for beans by scaning *all* packages *and* subpackages in the same package as the context configuration.
+The `@ComponentScan` annotation tells Spring to search for beans by scanning *all* packages *and* subpackages in the same package as the context configuration.
 
 How does Spring know if something is a bean? It looks for the `@Component` in packages being searched.
 
