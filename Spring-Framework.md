@@ -434,7 +434,7 @@ Some of the most common projects within the Spring ecosystem are as follows:
 
 A full list of Spring projects can be found [here](https://spring.io/projects).
 
-# Terms and Jargon
+# Glossary
 ## Dependency
 An object that another object depends on for critical functionality.
 
